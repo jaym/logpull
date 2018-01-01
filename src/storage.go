@@ -10,22 +10,27 @@ import (
 )
 
 type Store struct {
-	db *bolt.DB
+	db  *bolt.DB
+	dir string
 }
 
 type FileDesc struct {
-	Guid string // A unique string representing the file. This should be the
-	// symlink file name
+	Id       uint64
 	FileName string // The filename to use when pulling this file
 	Sha256   string // The checksum of the file
 }
 
-func NewStore(path string) (*Store, error) {
-	db, err := bolt.Open(path, 0600, nil)
+func NewStore(dir string) (*Store, error) {
+	db, err := bolt.Open(path.Join(dir, "db"), 0600, nil)
+
 	if err != nil {
 		return nil, err
 	}
-	return &Store{db}, nil
+
+	return &Store{
+		db:  db,
+		dir: dir,
+	}, nil
 }
 
 func (s *Store) Close() {
@@ -33,7 +38,7 @@ func (s *Store) Close() {
 }
 
 // Append a FileDesc to a feed
-func (s *Store) AppendToFeed(feedName string, item FileDesc) error {
+func (s *Store) appendToFeed(feedName string, item FileDesc) error {
 	payload, err := marshal(item)
 
 	if err != nil {
@@ -81,6 +86,7 @@ func (s *Store) ReadFeed(feedName string, since uint64) ([]FileDesc, uint64, err
 					}).WithError(err).Error("Failed to unmarshal FileDesc")
 				return err
 			}
+			item.Id = btoi(k)
 			files = append(files, item)
 		}
 		next = b.Sequence()
