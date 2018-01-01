@@ -2,8 +2,15 @@ package logpull
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/gob"
+	"encoding/hex"
+	"fmt"
+	"io"
+	"os"
+	"path"
+	"path/filepath"
 
 	"github.com/boltdb/bolt"
 	"github.com/sirupsen/logrus"
@@ -16,7 +23,7 @@ type Store struct {
 
 type FileDesc struct {
 	Id       uint64
-	FileName string // The filename to use when pulling this file
+	FilePath string // The filename to use when pulling this file
 	Sha256   string // The checksum of the file
 }
 
@@ -35,6 +42,38 @@ func NewStore(dir string) (*Store, error) {
 
 func (s *Store) Close() {
 	s.db.Close()
+}
+
+func (s *Store) AppendFileToFeed(feedName string, filePath string) error {
+	if !filepath.IsAbs(filePath) {
+		return fmt.Errorf("Provided path is not absolute")
+	}
+
+	sha, err := shasum(filePath)
+
+	if err != nil {
+		return err
+	}
+
+	return s.appendToFeed(feedName, FileDesc{
+		FilePath: filePath,
+		Sha256:   sha,
+	})
+}
+
+func shasum(filePath string) (string, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // Append a FileDesc to a feed

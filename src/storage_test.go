@@ -3,6 +3,7 @@ package logpull
 import (
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,11 +12,11 @@ import (
 
 var EXAMPLE_FILES = []FileDesc{
 	FileDesc{
-		FileName: "filename.txt",
+		FilePath: "filename.txt",
 		Sha256:   "sha256-0",
 	},
 	FileDesc{
-		FileName: "filename.txt",
+		FilePath: "filename.txt",
 		Sha256:   "sha256-1",
 	},
 }
@@ -128,4 +129,28 @@ func TestStorage(t *testing.T) {
 		assert.Equal(t, uint64(4), seq)
 	})
 
+	t.Run("Test append file relative path", func(t *testing.T) {
+		feed := "no-append-file"
+		filePath := "testdata/example_file"
+		err := store.AppendFileToFeed(feed, filePath)
+		require.Error(t, err)
+	})
+
+	t.Run("Test append file abs path", func(t *testing.T) {
+		feed := "append-file"
+		filePath, err := filepath.Abs("testdata/example_file")
+		require.NoError(t, err)
+		store.AppendFileToFeed(feed, filePath)
+		files, next, err := store.ReadFeed(feed, 0)
+		require.NoError(t, err)
+		assert.Equal(t, uint64(2), next)
+
+		expected := FileDesc{
+			Id:       1,
+			Sha256:   "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c",
+			FilePath: filePath,
+		}
+
+		assert.Equal(t, []FileDesc{expected}, files)
+	})
 }
