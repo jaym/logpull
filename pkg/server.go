@@ -17,7 +17,8 @@ import (
 )
 
 type Server struct {
-	store *Store
+	store  *Store
+	myCert tls.Certificate
 }
 
 type FeedAppendRequest struct {
@@ -42,7 +43,8 @@ func Spawn(config ServerConfig) error {
 	}
 
 	server := &Server{
-		store: store,
+		store:  store,
+		myCert: config.ServerCert,
 	}
 
 	r := mux.NewRouter()
@@ -174,6 +176,20 @@ func (s *Server) feedRead(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) feedAppend(w http.ResponseWriter, r *http.Request) {
+	myCert, err := x509.ParseCertificate(s.myCert.Certificate[0])
+	if err != nil {
+		logrus.WithError(err).Error("Could not parse cert")
+		http.Error(w, "Internal error", 500)
+		return
+	}
+
+	// Only that who possesses the server cert may add for now
+	if !r.TLS.PeerCertificates[0].Equal(myCert) {
+		logrus.WithError(err).Error("Unauthorized")
+		http.Error(w, "No you cannot", http.StatusForbidden)
+		return
+	}
+
 	vars := mux.Vars(r)
 	feed := vars["feed"]
 	if feed == "" {
@@ -183,7 +199,7 @@ func (s *Server) feedAppend(w http.ResponseWriter, r *http.Request) {
 
 	decoder := json.NewDecoder(r.Body)
 	var body FeedAppendRequest
-	err := decoder.Decode(&body)
+	err = decoder.Decode(&body)
 
 	if err != nil {
 		logrus.WithError(err).Error("Could not parse request")
