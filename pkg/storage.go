@@ -135,6 +135,37 @@ func (s *Store) ReadFeed(feedName string, since uint64) ([]FileDesc, uint64, err
 	return files, next + 1, err
 }
 
+func (s *Store) Get(feedName string, id uint64) (FileDesc, error) {
+	var fileDesc FileDesc
+
+	err := s.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket(bucketName(feedName))
+
+		if b == nil {
+			return fmt.Errorf("Not found")
+		}
+
+		v := b.Get(itob(id))
+
+		if v == nil {
+			return fmt.Errorf("Not found")
+		}
+
+		unmarshaled, err := unmarshal(v)
+
+		if err != nil {
+			return err
+		}
+
+		unmarshaled.Id = id
+		fileDesc = unmarshaled
+
+		return nil
+	})
+
+	return fileDesc, err
+}
+
 func bucketName(feedName string) []byte {
 	return []byte("feeds/" + feedName)
 }
