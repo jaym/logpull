@@ -1,8 +1,11 @@
 package logpull
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path"
@@ -15,11 +18,6 @@ import (
 
 type Server struct {
 	store *Store
-}
-
-type ServerConfig struct {
-	ListenAddress string
-	Path          string
 }
 
 type FeedAppendRequest struct {
@@ -60,7 +58,28 @@ func Spawn(config ServerConfig) error {
 		server.download(w, r)
 	}).Methods("GET")
 
-	return http.ListenAndServe(config.ListenAddress, r)
+	clientCaCertPool := x509.NewCertPool()
+	clientCaCertPool.AppendCertsFromPEM(config.ClientCaCert)
+
+	tlsConfig := &tls.Config{
+		ClientCAs:    clientCaCertPool,
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		Certificates: []tls.Certificate{config.ServerCert},
+	}
+
+	httpServer := &http.Server{
+		Addr:      config.ListenAddress,
+		Handler:   r,
+		TLSConfig: tlsConfig,
+	}
+
+	conn, err := net.Listen("tcp", config.ListenAddress)
+
+	if err != nil {
+		return nil
+	}
+
+	return httpServer.Serve(tls.NewListener(conn, tlsConfig))
 }
 
 func (s *Server) download(w http.ResponseWriter, r *http.Request) {
