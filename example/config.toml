@@ -1,0 +1,7 @@
+cert = "./example/testserver.crt"
+key = "./example/testserver.key"
+
+[server]
+listen_address = "0.0.0.0:10000"
+path = "./data"
+client_ca_cert = "./example/thechamberofunderstanding.com.crt"
